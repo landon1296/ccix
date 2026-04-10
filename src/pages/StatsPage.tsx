@@ -8,8 +8,15 @@ import * as SeasonService from '../services/seasons';
 import * as StatsService from '../services/stats';
 import { League, Season } from '../lib/supabase';
 
-type Tab = 'my' | 'league' | 'bytrack';
+type Tab = 'my' | 'league' | 'bytrack' | 'laptimes';
 type TrackView = 'mine' | 'league';
+
+const TAB_LABELS: Record<Tab, string> = {
+  my: 'My Stats',
+  league: 'League',
+  bytrack: 'By Track',
+  laptimes: 'Laps',
+};
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -20,7 +27,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-/** Group league track stats by track name, sorted by avg finish within each track */
+/** Group league track stats by track name, sorted by points then wins */
 function groupByTrack(
   data: (StatsService.TrackStats & { userId: string; displayName: string })[]
 ): Map<string, (StatsService.TrackStats & { userId: string; displayName: string })[]> {
@@ -30,7 +37,6 @@ function groupByTrack(
     list.push(row);
     map.set(row.trackName, list);
   }
-  // Sort each track's members by totalPoints desc, then wins desc
   for (const [, members] of map) {
     members.sort((a, b) => b.totalPoints !== a.totalPoints ? b.totalPoints - a.totalPoints : b.wins - a.wins);
   }
@@ -58,13 +64,22 @@ export function StatsPage() {
   const [loadingLeague, setLoadingLeague] = useState(false);
   const leagueLoaded = useRef(false);
 
-  // By Track tab (lazy) — both mine and league data
+  // By Track tab (lazy) — stats + league lap times
   const [myTracks, setMyTracks] = useState<StatsService.TrackStats[]>([]);
   const [leagueTracks, setLeagueTracks] = useState<
     (StatsService.TrackStats & { userId: string; displayName: string })[]
   >([]);
+  const [leagueLapMap, setLeagueLapMap] = useState<Map<string, Map<string, string>>>(new Map());
   const [loadingTracks, setLoadingTracks] = useState(false);
   const tracksLoaded = useRef(false);
+  // Heat map toggle for "My Stats" by-track view
+  const [heatmapMode, setHeatmapMode] = useState(false);
+
+  // Lap Times tab (lazy)
+  const [lapTimes, setLapTimes] = useState<StatsService.TrackLapTimes[]>([]);
+  const [loadingLapTimes, setLoadingLapTimes] = useState(false);
+  const lapTimesLoaded = useRef(false);
+  const [expandedLapTrack, setExpandedLapTrack] = useState<string | null>(null);
 
   const loadMyStats = useCallback(async () => {
     if (!user) return;
@@ -128,17 +143,33 @@ export function StatsPage() {
     tracksLoaded.current = true;
     const results = await Promise.all([
       StatsService.getMyStatsByTrack(user.id),
-      selectedLeague ? StatsService.getLeagueMemberStatsByTrack(selectedLeague.id) : Promise.resolve({ tracks: [], error: null }),
+      selectedLeague
+        ? StatsService.getLeagueMemberStatsByTrack(selectedLeague.id)
+        : Promise.resolve({ tracks: [], error: null }),
+      selectedLeague
+        ? StatsService.getLeagueLapTimesByTrack(selectedLeague.id)
+        : Promise.resolve({ lapMap: new Map(), error: null }),
     ]);
     setMyTracks(results[0].tracks);
     setLeagueTracks((results[1] as any).tracks ?? []);
+    setLeagueLapMap((results[2] as any).lapMap ?? new Map());
     setLoadingTracks(false);
   }, [user, selectedLeague]);
+
+  const loadLapTimesTab = useCallback(async () => {
+    if (!user || lapTimesLoaded.current) return;
+    setLoadingLapTimes(true);
+    lapTimesLoaded.current = true;
+    const { tracks } = await StatsService.getMyLapTimesByTrack(user.id);
+    setLapTimes(tracks);
+    setLoadingLapTimes(false);
+  }, [user]);
 
   const handleTabChange = (t: Tab) => {
     setTab(t);
     if (t === 'league') loadLeagueTab();
     if (t === 'bytrack') loadTracksTab();
+    if (t === 'laptimes') loadLapTimesTab();
   };
 
   const handleLeagueChange = async (leagueId: string) => {
@@ -164,12 +195,15 @@ export function StatsPage() {
     }
     setLoadingMy(false);
     if (tab === 'league') { setLeagueMembers([]); loadLeagueTab(); }
-    if (tab === 'bytrack') { setMyTracks([]); setLeagueTracks([]); loadTracksTab(); }
+    if (tab === 'bytrack') { setMyTracks([]); setLeagueTracks([]); setLeagueLapMap(new Map()); loadTracksTab(); }
   };
 
-  // Grouped league track data (memoized inline)
+  // Grouped league track data
   const leagueTrackMap = groupByTrack(leagueTracks);
   const sortedTrackNames = Array.from(leagueTrackMap.keys()).sort();
+
+  // Heatmap: max wins across all my tracks (at least 1 to avoid /0)
+  const maxWins = myTracks.length > 0 ? Math.max(...myTracks.map(t => t.wins), 1) : 1;
 
   return (
     <div className="flex flex-col">
@@ -184,19 +218,20 @@ export function StatsPage() {
 
       {/* Sub-tabs */}
       <div className="flex border-b border-border mt-3 px-4">
-        {(['my', 'league', 'bytrack'] as Tab[]).map(t => (
+        {(['my', 'league', 'bytrack', 'laptimes'] as Tab[]).map(t => (
           <button
             key={t}
             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === t ? 'tab-active' : 'tab-inactive'}`}
             onClick={() => handleTabChange(t)}
           >
-            {t === 'my' ? 'My Stats' : t === 'league' ? 'League' : 'By Track'}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
 
       <div className="px-4 py-4">
-        {/* My Stats Tab */}
+
+        {/* ── My Stats Tab ─────────────────────────────────────────────────── */}
         {tab === 'my' && (
           loadingMy ? <div className="flex justify-center py-8"><Spinner size={24} className="text-accent" /></div> : (
             <div className="space-y-5">
@@ -281,7 +316,7 @@ export function StatsPage() {
           )
         )}
 
-        {/* League Stats Tab */}
+        {/* ── League Stats Tab ──────────────────────────────────────────────── */}
         {tab === 'league' && (
           loadingLeague ? <div className="flex justify-center py-8"><Spinner size={24} className="text-accent" /></div> : (
             leagueMembers.length === 0 ? (
@@ -315,13 +350,13 @@ export function StatsPage() {
           )
         )}
 
-        {/* By Track Tab */}
+        {/* ── By Track Tab ──────────────────────────────────────────────────── */}
         {tab === 'bytrack' && (
           loadingTracks
             ? <div className="flex justify-center py-8"><Spinner size={24} className="text-accent" /></div>
             : (
               <div>
-                {/* Mine / League toggle */}
+                {/* League / My Stats toggle */}
                 <div className="flex rounded-lg bg-surface-2 p-0.5 mb-4">
                   <button
                     className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${trackView === 'league' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
@@ -345,6 +380,7 @@ export function StatsPage() {
                       <div className="space-y-3">
                         {sortedTrackNames.map(trackName => {
                           const members = leagueTrackMap.get(trackName)!;
+                          const trackLaps = leagueLapMap.get(trackName);
                           return (
                             <div key={trackName} className="card">
                               {/* Track header */}
@@ -357,6 +393,7 @@ export function StatsPage() {
                               <div className="space-y-2">
                                 {members.map((m, idx) => {
                                   const isMe = m.userId === user?.id;
+                                  const memberBestLap = trackLaps?.get(m.userId);
                                   return (
                                     <div
                                       key={m.userId}
@@ -374,6 +411,9 @@ export function StatsPage() {
                                           <span>{m.top5s} top‑5</span>
                                           <span>{m.top10s} top‑10</span>
                                           {m.fastLapCount > 0 && <span className="text-yellow-400">⚡{m.fastLapCount} FL</span>}
+                                          {memberBestLap && (
+                                            <span className="text-purple-400 font-mono">🕐 {memberBestLap}</span>
+                                          )}
                                         </div>
                                       </div>
                                       <div className="text-right flex-shrink-0">
@@ -396,30 +436,137 @@ export function StatsPage() {
                   myTracks.length === 0
                     ? <p className="text-gray-400 text-sm text-center py-8">No track stats yet. Enter race results to see per-track breakdowns.</p>
                     : (
-                      <div className="space-y-2">
-                        {myTracks.map(t => (
-                          <div key={t.trackName} className="card">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-medium text-sm">{t.trackName}</span>
-                            </div>
-                            <div className="grid grid-cols-5 gap-2 text-center">
-                              <div><div className="text-accent font-bold text-sm">{t.totalPoints}</div><div className="text-xs text-gray-500">pts</div></div>
-                              <div><div className="font-bold text-sm">{t.wins}</div><div className="text-xs text-gray-500">wins</div></div>
-                              <div><div className="font-bold text-sm">{t.top5s}</div><div className="text-xs text-gray-500">top‑5</div></div>
-                              <div><div className="font-bold text-sm">{t.top10s}</div><div className="text-xs text-gray-500">top‑10</div></div>
-                              <div><div className="font-bold text-sm">P{t.averageFinish}</div><div className="text-xs text-gray-500">avg</div></div>
-                            </div>
-                            {t.fastLapCount > 0 && (
-                              <div className="mt-1.5 text-xs text-yellow-400">⚡ {t.fastLapCount} fastest lap{t.fastLapCount !== 1 ? 's' : ''}</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <>
+                        {/* Header + heatmap toggle */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs text-gray-500 uppercase tracking-wider">My Stats by Track</span>
+                          <button
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              heatmapMode
+                                ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                : 'bg-surface-2 text-gray-400 border-transparent hover:text-white'
+                            }`}
+                            onClick={() => setHeatmapMode(h => !h)}
+                          >
+                            {/* Heat map icon */}
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <rect x="1" y="1" width="8" height="8" rx="1" opacity="0.25"/>
+                              <rect x="11" y="1" width="8" height="8" rx="1" opacity="0.5"/>
+                              <rect x="1" y="11" width="8" height="8" rx="1" opacity="0.75"/>
+                              <rect x="11" y="11" width="8" height="8" rx="1" opacity="1"/>
+                            </svg>
+                            Heat Map
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {myTracks.map(t => {
+                            const intensity = heatmapMode && t.wins > 0
+                              ? Math.min(0.12 + (t.wins / maxWins) * 0.45, 0.57)
+                              : 0;
+                            return (
+                              <div
+                                key={t.trackName}
+                                className="card transition-colors duration-300"
+                                style={intensity > 0 ? { backgroundColor: `rgba(249,115,22,${intensity})` } : undefined}
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-medium text-sm">{t.trackName}</span>
+                                  {heatmapMode && t.wins > 0 && (
+                                    <span className="ml-auto text-xs text-orange-400 font-semibold">{t.wins} win{t.wins !== 1 ? 's' : ''}</span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-5 gap-2 text-center">
+                                  <div><div className="text-accent font-bold text-sm">{t.totalPoints}</div><div className="text-xs text-gray-500">pts</div></div>
+                                  <div><div className="font-bold text-sm">{t.wins}</div><div className="text-xs text-gray-500">wins</div></div>
+                                  <div><div className="font-bold text-sm">{t.top5s}</div><div className="text-xs text-gray-500">top‑5</div></div>
+                                  <div><div className="font-bold text-sm">{t.top10s}</div><div className="text-xs text-gray-500">top‑10</div></div>
+                                  <div><div className="font-bold text-sm">P{t.averageFinish}</div><div className="text-xs text-gray-500">avg</div></div>
+                                </div>
+                                {t.fastLapCount > 0 && (
+                                  <div className="mt-1.5 text-xs text-yellow-400">⚡ {t.fastLapCount} fastest lap{t.fastLapCount !== 1 ? 's' : ''}</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     )
                 )}
               </div>
             )
         )}
+
+        {/* ── Lap Times Tab ─────────────────────────────────────────────────── */}
+        {tab === 'laptimes' && (
+          loadingLapTimes
+            ? <div className="flex justify-center py-8"><Spinner size={24} className="text-accent" /></div>
+            : lapTimes.length === 0
+              ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400 text-sm">No lap times recorded yet.</p>
+                  <p className="text-gray-500 text-xs mt-1">Enter a fastest lap time when logging race results.</p>
+                </div>
+              )
+              : (
+                <div className="space-y-2">
+                  {lapTimes.map(t => {
+                    const isExpanded = expandedLapTrack === t.trackName;
+                    return (
+                      <div key={t.trackName} className="card overflow-hidden">
+                        {/* Track row — tap to expand */}
+                        <button
+                          className="w-full flex items-center gap-3 text-left"
+                          onClick={() => setExpandedLapTrack(prev => prev === t.trackName ? null : t.trackName)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{t.trackName}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              {t.allLaps.length} lap time{t.allLaps.length !== 1 ? 's' : ''} recorded
+                            </div>
+                          </div>
+                          {/* Best lap badge */}
+                          <div className="text-right flex-shrink-0 mr-1">
+                            <div className="text-accent font-black text-sm font-mono">⚡ {t.bestLap}</div>
+                            <div className="text-xs text-gray-500">best</div>
+                          </div>
+                          {/* Chevron */}
+                          <svg
+                            className={`w-4 h-4 text-gray-500 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                          >
+                            <path d="M9 18l6-6-6-6"/>
+                          </svg>
+                        </button>
+
+                        {/* Expanded: all lap times with animation */}
+                        <div
+                          className="overflow-hidden transition-all duration-300 ease-in-out"
+                          style={{ maxHeight: isExpanded ? `${t.allLaps.length * 36 + 24}px` : '0px' }}
+                        >
+                          <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                            {t.allLaps.map((lap, idx) => {
+                              const isBest = lap.lapTime === t.bestLap && idx === 0;
+                              return (
+                                <div key={idx} className="flex items-center justify-between px-1">
+                                  <span className="text-xs text-gray-500">
+                                    {isBest ? '★ Best' : `Lap ${idx + 1}`}
+                                  </span>
+                                  <span className={`text-sm font-mono ${isBest ? 'text-accent font-bold' : 'text-gray-300'}`}>
+                                    {lap.lapTime}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+        )}
+
       </div>
     </div>
   );

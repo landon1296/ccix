@@ -389,6 +389,111 @@ export async function getBonusStats(
   return map;
 }
 
+// ─── Lap Times ────────────────────────────────────────────────────────────────
+
+export interface TrackLapTimes {
+  trackName: string;
+  /** Fastest recorded lap at this track */
+  bestLap: string;
+  /** All lap times sorted fastest → slowest */
+  allLaps: { lapTime: string }[];
+}
+
+function parseLapTime(lapTime: string): number {
+  const parts = lapTime.split(':');
+  if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+  return parseFloat(lapTime);
+}
+
+/** Return the current user's recorded fastest lap times grouped by track. */
+export async function getMyLapTimesByTrack(
+  userId: string
+): Promise<{ tracks: TrackLapTimes[]; error: Error | null }> {
+  try {
+    const { data: results, error } = await supabase
+      .from('race_results')
+      .select('fastest_lap_time, race_id')
+      .eq('user_id', userId)
+      .not('fastest_lap_time', 'is', null);
+    if (error) throw error;
+    const list = (results ?? []) as any[];
+    if (list.length === 0) return { tracks: [], error: null };
+
+    const raceIds = [...new Set(list.map((r) => r.race_id as string))];
+    const { data: races } = await supabase
+      .from('races').select('id, track_name').in('id', raceIds);
+    const trackMap = new Map(((races ?? []) as any[]).map((r) => [r.id as string, r.track_name as string]));
+
+    const trackLaps = new Map<string, string[]>();
+    for (const r of list) {
+      const track = trackMap.get(r.race_id);
+      if (!track || !r.fastest_lap_time) continue;
+      const laps = trackLaps.get(track) ?? [];
+      laps.push(r.fastest_lap_time as string);
+      trackLaps.set(track, laps);
+    }
+
+    const tracks: TrackLapTimes[] = [];
+    for (const [trackName, laps] of trackLaps) {
+      const sorted = [...laps].sort((a, b) => parseLapTime(a) - parseLapTime(b));
+      tracks.push({
+        trackName,
+        bestLap: sorted[0],
+        allLaps: sorted.map((l) => ({ lapTime: l })),
+      });
+    }
+    tracks.sort((a, b) => a.trackName.localeCompare(b.trackName));
+    return { tracks, error: null };
+  } catch (e) {
+    return { tracks: [], error: e as Error };
+  }
+}
+
+/**
+ * Return each league member's best lap time at every track they've raced.
+ * Result: Map<trackName, Map<userId, bestLapTime>>
+ */
+export async function getLeagueLapTimesByTrack(
+  leagueId: string
+): Promise<{ lapMap: Map<string, Map<string, string>>; error: Error | null }> {
+  try {
+    const { data: memberRows } = await supabase
+      .from('league_members').select('user_id').eq('league_id', leagueId);
+    const userIds = ((memberRows ?? []) as any[]).map((m) => m.user_id as string);
+    if (userIds.length === 0) return { lapMap: new Map(), error: null };
+
+    const { data: results, error } = await supabase
+      .from('race_results')
+      .select('user_id, race_id, fastest_lap_time')
+      .in('user_id', userIds)
+      .not('fastest_lap_time', 'is', null);
+    if (error) throw error;
+    const list = (results ?? []) as any[];
+    if (list.length === 0) return { lapMap: new Map(), error: null };
+
+    const raceIds = [...new Set(list.map((r) => r.race_id as string))];
+    const { data: races } = await supabase
+      .from('races').select('id, track_name').in('id', raceIds);
+    const trackMap = new Map(((races ?? []) as any[]).map((r) => [r.id as string, r.track_name as string]));
+
+    // Map<trackName, Map<userId, bestLapTime>>
+    const lapMap = new Map<string, Map<string, string>>();
+    for (const r of list) {
+      const track = trackMap.get(r.race_id);
+      if (!track || !r.fastest_lap_time) continue;
+      const byUser = lapMap.get(track) ?? new Map<string, string>();
+      const existing = byUser.get(r.user_id);
+      if (!existing || parseLapTime(r.fastest_lap_time as string) < parseLapTime(existing)) {
+        byUser.set(r.user_id, r.fastest_lap_time as string);
+      }
+      lapMap.set(track, byUser);
+    }
+    return { lapMap, error: null };
+  } catch (e) {
+    return { lapMap: new Map(), error: e as Error };
+  }
+}
+
 export async function getSeasonWinner(
   seasonId: string
 ): Promise<{ winnerId: string | null; winnerName: string | null }> {
