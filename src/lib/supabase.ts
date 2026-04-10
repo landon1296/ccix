@@ -101,6 +101,14 @@ export interface RaceResult {
   updated_at: string;
 }
 
+export interface NascarCupDriver {
+  id: string;
+  name: string;
+  wins: number;
+  is_active: boolean;
+  updated_at: string;
+}
+
 export interface LeagueMemberWithUser extends LeagueMember {
   user: User;
 }
