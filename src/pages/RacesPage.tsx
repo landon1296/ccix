@@ -196,7 +196,7 @@ export function RacesPage() {
                     displayName: r.users?.display_name ?? r.users?.email ?? 'Unknown',
                   })),
                   config,
-                  trackName: race.track_name,
+                  trackName: race.canonical_track_name ?? race.track_name,
                 })
               : null;
 

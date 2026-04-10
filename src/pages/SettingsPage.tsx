@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/Spinner';
 import { CarAvatar, AvatarStyle } from '../utils/avatar';
+import { useWakeLock } from '../hooks/useWakeLock';
 import * as LeagueService from '../services/leagues';
 import { League } from '../lib/supabase';
 
@@ -25,6 +26,7 @@ export function SettingsPage() {
 
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loadingLeagues, setLoadingLeagues] = useState(true);
+  const wakeLock = useWakeLock();
 
   useEffect(() => {
     if (!user) return;
@@ -150,6 +152,33 @@ export function SettingsPage() {
         <span className="font-medium flex items-center gap-2"><span>🏆</span> Trophy Room</span>
         <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+
+      {/* Screen Wake Lock */}
+      {wakeLock.supported && (
+        <section className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-sm">Keep Screen On</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Prevents your screen from sleeping while using CCIX
+                {wakeLock.active && <span className="text-green-400 ml-1">(active)</span>}
+              </p>
+            </div>
+            <button
+              onClick={wakeLock.toggle}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                wakeLock.enabled ? 'bg-accent' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                  wakeLock.enabled ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Sign Out */}
       <button className="btn-danger w-full" onClick={signOut}>Sign Out</button>

@@ -61,10 +61,21 @@ export interface Season {
   archived_at: string | null;
 }
 
+export interface Track {
+  id: string;
+  name: string;
+  track_type: string;
+  default_stage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Race {
   id: string;
   season_id: string;
   track_name: string;
+  track_id: string;
+  canonical_track_name?: string;
   race_number: number;
   race_id: string;
   created_at: string;

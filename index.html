@@ -3,12 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#0f0f0f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CCIX" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>CCIX</title>
+    <style>
+      /* Prevent overscroll bounce on iOS */
+      html, body { overscroll-behavior: none; }
+      /* Safe area padding for notched devices */
+      body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+      /* Hide scrollbar but keep scrollable */
+      ::-webkit-scrollbar { display: none; }
+      * { -webkit-tap-highlight-color: transparent; }
+      /* Prevent text selection on UI elements for native feel */
+      button, a, nav { -webkit-user-select: none; user-select: none; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+    </script>
   </body>
 </html>

@@ -364,8 +364,8 @@ export async function getBonusStats(
 
     const raceIds = [...new Set((results as any[]).map((r: any) => r.race_id as string))];
     const { data: races } = await supabase
-      .from('races').select('id, track_name').in('id', raceIds);
-    const trackMap = new Map(((races ?? []) as any[]).map((r: any) => [r.id as string, r.track_name as string]));
+      .from('races').select('id, track_id, tracks(name)').in('id', raceIds);
+    const trackMap = new Map(((races ?? []) as any[]).map((r: any) => [r.id as string, (r.tracks?.name ?? r.track_name) as string]));
 
     for (const r of results as any[]) {
       const track = trackMap.get(r.race_id) ?? '';
@@ -421,8 +421,8 @@ export async function getMyLapTimesByTrack(
 
     const raceIds = [...new Set(list.map((r) => r.race_id as string))];
     const { data: races } = await supabase
-      .from('races').select('id, track_name').in('id', raceIds);
-    const trackMap = new Map(((races ?? []) as any[]).map((r) => [r.id as string, r.track_name as string]));
+      .from('races').select('id, track_id, tracks(name)').in('id', raceIds);
+    const trackMap = new Map(((races ?? []) as any[]).map((r: any) => [r.id as string, (r.tracks?.name ?? '') as string]));
 
     const trackLaps = new Map<string, string[]>();
     for (const r of list) {
@@ -473,8 +473,8 @@ export async function getLeagueLapTimesByTrack(
 
     const raceIds = [...new Set(list.map((r) => r.race_id as string))];
     const { data: races } = await supabase
-      .from('races').select('id, track_name').in('id', raceIds);
-    const trackMap = new Map(((races ?? []) as any[]).map((r) => [r.id as string, r.track_name as string]));
+      .from('races').select('id, track_id, tracks(name)').in('id', raceIds);
+    const trackMap = new Map(((races ?? []) as any[]).map((r: any) => [r.id as string, (r.tracks?.name ?? '') as string]));
 
     // Map<trackName, Map<userId, bestLapTime>>
     const lapMap = new Map<string, Map<string, string>>();

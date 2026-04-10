@@ -22,6 +22,10 @@ export function RaceEntryPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Navigation: prev/next race in the season
+  const [prevRaceId, setPrevRaceId] = useState<string | null>(null);
+  const [nextRaceId, setNextRaceId] = useState<string | null>(null);
+
   // Form state
   const [stage1, setStage1] = useState('');
   const [stage2, setStage2] = useState('');
@@ -50,8 +54,17 @@ export function RaceEntryPage() {
       setFastestLapTime(mine.fastest_lap_time ?? '');
     }
     if (r?.league_id) {
-      const { league: lg } = await LeagueService.getLeague(r.league_id);
+      const [{ league: lg }, { races: seasonRaces }] = await Promise.all([
+        LeagueService.getLeague(r.league_id),
+        RaceService.getRaces(r.season_id),
+      ]);
       setLeague(lg);
+
+      // Find prev/next race by race_number
+      const sorted = seasonRaces.sort((a: Race, b: Race) => a.race_number - b.race_number);
+      const idx = sorted.findIndex((sr: Race) => sr.id === raceId);
+      setPrevRaceId(idx > 0 ? sorted[idx - 1].id : null);
+      setNextRaceId(idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1].id : null);
     }
     setLoading(false);
   }, [raceId, user]);
@@ -66,14 +79,15 @@ export function RaceEntryPage() {
     setSaving(true);
 
     const stagesEnabled = league.scoring_config?.stagesEnabled ?? true;
-    const effectiveStages = getEffectiveStages(stagesEnabled, race.track_name);
+    const canonicalName = race.canonical_track_name ?? race.track_name;
+    const effectiveStages = getEffectiveStages(stagesEnabled, canonicalName);
     const s1 = effectiveStages >= 1 && stage1 ? parseInt(stage1) : null;
     const s2 = effectiveStages >= 2 && stage2 ? parseInt(stage2) : null;
     const s3 = effectiveStages >= 3 && stage3 ? parseInt(stage3) : null;
 
     const { error: err } = await RaceService.submitRaceResult(
       raceId, user.id, s1, s2, s3, finishPos, fastestLap,
-      league.scoring_config, effectiveStages, race.track_name,
+      league.scoring_config, effectiveStages, canonicalName,
       fastestLapTime || null
     );
     setSaving(false);
@@ -98,7 +112,8 @@ export function RaceEntryPage() {
   if (!race) return <div className="px-4 py-8 text-center text-gray-400">Race not found.</div>;
 
   const stagesEnabled = league?.scoring_config?.stagesEnabled ?? true;
-  const effectiveStages = getEffectiveStages(stagesEnabled, race.track_name);
+  const canonicalTrackName = race.canonical_track_name ?? race.track_name;
+  const effectiveStages = getEffectiveStages(stagesEnabled, canonicalTrackName);
   const fastestLapBonus = league?.scoring_config?.fastestLapBonus ?? 1;
 
   return (
@@ -108,8 +123,11 @@ export function RaceEntryPage() {
         <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white">
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-        <div>
-          <h1 className="font-bold text-lg">{race.track_name}</h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-bold text-lg truncate">{race.track_name}</h1>
+          {race.canonical_track_name && race.canonical_track_name !== race.track_name && (
+            <p className="text-xs text-accent truncate">{race.canonical_track_name}</p>
+          )}
           <p className="text-xs text-gray-400">{race.race_id}</p>
         </div>
       </div>
@@ -124,16 +142,16 @@ export function RaceEntryPage() {
             <div className={`grid gap-3 ${effectiveStages >= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Stage 1</label>
-                <input type="number" min="1" max="40" className="input-field" placeholder="Pos" value={stage1} onChange={e => setStage1(e.target.value)} />
+                <input type="number" inputMode="numeric" pattern="[0-9]*" min="1" max="40" className="input-field" placeholder="Pos" value={stage1} onChange={e => setStage1(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Stage 2</label>
-                <input type="number" min="1" max="40" className="input-field" placeholder="Pos" value={stage2} onChange={e => setStage2(e.target.value)} />
+                <input type="number" inputMode="numeric" pattern="[0-9]*" min="1" max="40" className="input-field" placeholder="Pos" value={stage2} onChange={e => setStage2(e.target.value)} />
               </div>
               {effectiveStages >= 3 && (
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Stage 3</label>
-                  <input type="number" min="1" max="40" className="input-field" placeholder="Pos" value={stage3} onChange={e => setStage3(e.target.value)} />
+                  <input type="number" inputMode="numeric" pattern="[0-9]*" min="1" max="40" className="input-field" placeholder="Pos" value={stage3} onChange={e => setStage3(e.target.value)} />
                 </div>
               )}
             </div>
@@ -143,7 +161,7 @@ export function RaceEntryPage() {
           <div>
             <label className="block text-xs text-gray-400 mb-1">Finish Position *</label>
             <input
-              type="number" min="1" max="40"
+              type="number" inputMode="numeric" pattern="[0-9]*" min="1" max="40"
               className="input-field text-lg font-bold"
               placeholder="e.g. 3"
               value={finish}
@@ -174,11 +192,12 @@ export function RaceEntryPage() {
           {/* Fastest lap time field — always visible */}
           <div>
             <label className="block text-xs text-gray-400 mb-1">
-              ⚡ Fastest Lap Time
+              Fastest Lap Time
               <span className="text-gray-600 ml-1">(optional, e.g. 1:23.456)</span>
             </label>
             <input
               type="text"
+              inputMode="numeric"
               className="input-field font-mono"
               placeholder="1:23.456"
               value={fastestLapTime}
@@ -214,6 +233,26 @@ export function RaceEntryPage() {
         </div>
       </div>
 
+      {/* Prev / Next race navigation */}
+      <div className="flex gap-2 mb-5">
+        <button
+          className="btn-secondary flex-1 flex items-center justify-center gap-1.5 py-2.5"
+          disabled={!prevRaceId}
+          onClick={() => prevRaceId && navigate(`/app/races/${prevRaceId}`, { replace: true })}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          Prev Race
+        </button>
+        <button
+          className="btn-secondary flex-1 flex items-center justify-center gap-1.5 py-2.5"
+          disabled={!nextRaceId}
+          onClick={() => nextRaceId && navigate(`/app/races/${nextRaceId}`, { replace: true })}
+        >
+          Next Race
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+
       {/* Results table */}
       {results.length > 0 && (
         <div className="card">
@@ -222,6 +261,12 @@ export function RaceEntryPage() {
             {results.map((r, idx) => {
               const name = r.users?.display_name ?? r.users?.email ?? 'Unknown';
               const isMe = r.user_id === user?.id;
+              // Build stage position display
+              const stageParts: string[] = [];
+              if (r.stage1_pos != null) stageParts.push(`S1: P${r.stage1_pos}`);
+              if (r.stage2_pos != null) stageParts.push(`S2: P${r.stage2_pos}`);
+              if (r.stage3_pos != null) stageParts.push(`S3: P${r.stage3_pos}`);
+
               return (
                 <div
                   key={r.id}
@@ -239,9 +284,12 @@ export function RaceEntryPage() {
                       {name}
                       {isMe && <span className="text-accent text-xs ml-1">(you)</span>}
                     </div>
-                    <div className="text-xs text-gray-500 flex items-center gap-2">
-                      <span>P{r.finish_pos}</span>
-                      {r.fastest_lap && <span className="text-yellow-400">⚡ FL</span>}
+                    <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold">P{r.finish_pos}</span>
+                      {stageParts.length > 0 && (
+                        <span className="text-gray-600">{stageParts.join(' · ')}</span>
+                      )}
+                      {r.fastest_lap && <span className="text-yellow-400">FL</span>}
                       {r.fastest_lap_time && (
                         <span className="font-mono text-gray-400">{r.fastest_lap_time}</span>
                       )}
