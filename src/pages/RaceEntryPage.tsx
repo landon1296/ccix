@@ -7,6 +7,7 @@ import * as RaceService from '../services/races';
 import * as LeagueService from '../services/leagues';
 import { getEffectiveStages } from '../utils/scoring';
 import { Race } from '../lib/supabase';
+import { playBoogity } from '../utils/boogity';
 
 export function RaceEntryPage() {
   const { raceId } = useParams<{ raceId: string }>();
@@ -92,8 +93,20 @@ export function RaceEntryPage() {
     );
     setSaving(false);
     if (err) { setError(err.message); return; }
-    setSuccess('Result saved!');
-    setTimeout(() => setSuccess(''), 2500);
+
+    // 🏁 Grand slam easter egg: won every stage + race win + fastest lap
+    const finPos = parseInt(finish);
+    const wonFinish = finPos === 1;
+    const wonS1 = effectiveStages >= 1 ? parseInt(stage1) === 1 : true;
+    const wonS2 = effectiveStages >= 2 ? parseInt(stage2) === 1 : true;
+    const wonS3 = effectiveStages >= 3 ? parseInt(stage3) === 1 : true;
+    const isGrandSlam = effectiveStages >= 2 && wonS1 && wonS2 && wonS3 && wonFinish && fastestLap;
+    if (isGrandSlam) {
+      playBoogity();
+    }
+
+    setSuccess(isGrandSlam ? 'GRAND SLAM! Boogity boogity boogity!' : 'Result saved!');
+    setTimeout(() => setSuccess(''), isGrandSlam ? 5000 : 2500);
     await load();
   };
 
