@@ -70,6 +70,23 @@ export async function reorderRaces(seasonId: string, raceIds: string[]): Promise
   }
 }
 
+/**
+ * Update only the display name (race_name) of a race.
+ * This does NOT touch track_name, so stats remain keyed to the canonical track.
+ */
+export async function updateRaceName(raceId: string, raceName: string | null): Promise<{ error: Error | null }> {
+  try {
+    const { error } = await supabase
+      .from('races')
+      .update({ race_name: raceName || null })
+      .eq('id', raceId);
+    if (error) throw error;
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
+
 export async function deleteRace(raceId: string): Promise<{ error: Error | null }> {
   try {
     const { error } = await supabase.from('races').delete().eq('id', raceId);

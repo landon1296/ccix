@@ -76,6 +76,8 @@ export interface Race {
   track_name: string;
   track_id: string;
   canonical_track_name?: string;
+  /** Optional display name / title for the race (e.g. "Daytona 500") */
+  race_name?: string | null;
   race_number: number;
   race_id: string;
   created_at: string;

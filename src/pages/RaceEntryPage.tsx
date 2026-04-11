@@ -124,9 +124,9 @@ export function RaceEntryPage() {
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="font-bold text-lg truncate">{race.track_name}</h1>
-          {race.canonical_track_name && race.canonical_track_name !== race.track_name && (
-            <p className="text-xs text-accent truncate">{race.canonical_track_name}</p>
+          <h1 className="font-bold text-lg truncate">{race.race_name || race.track_name}</h1>
+          {race.race_name && (
+            <p className="text-xs text-accent truncate">{race.track_name}</p>
           )}
           <p className="text-xs text-gray-400">{race.race_id}</p>
         </div>

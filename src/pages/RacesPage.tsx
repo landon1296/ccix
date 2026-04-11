@@ -219,10 +219,13 @@ export function RacesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`font-medium truncate ${isComplete ? 'text-green-300' : ''}`}>
-                      {race.track_name}
+                      {race.race_name || race.track_name}
                     </span>
                     {isComplete && <span className="text-base leading-none flex-shrink-0">🏁</span>}
                   </div>
+                  {race.race_name && (
+                    <div className="text-[11px] text-gray-500">{race.track_name}</div>
+                  )}
                   <div className="text-xs text-gray-500 mt-0.5">
                     {isComplete
                       ? `All ${memberCount} results submitted`

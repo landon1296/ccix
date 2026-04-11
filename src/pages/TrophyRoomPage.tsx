@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/Spinner';
 import { supabase } from '../lib/supabase';
+import { fetchNascarAllTimeWins } from '../utils/wikipedia';
 
 type Tab = 'championships' | 'alltime';
 
@@ -78,26 +79,21 @@ export function TrophyRoomPage() {
     (async () => {
       setWinsLoading(true);
       try {
-        // Fetch NASCAR Cup drivers
-        const { data: nascarDrivers } = await supabase
-          .from('nascar_cup_drivers')
-          .select('name, wins, is_active')
-          .order('wins', { ascending: false });
-
-        // Fetch all CCIX users' career wins across all leagues
-        const { data: careerRows } = await supabase
-          .from('user_career_stats')
-          .select('user_id, wins, user:users(display_name)');
+        // Fetch NASCAR Cup drivers from Wikipedia (always up-to-date)
+        const [wikiDrivers, { data: careerRows }] = await Promise.all([
+          fetchNascarAllTimeWins().catch(() => [] as { rank: number; name: string; wins: number; isActive: boolean }[]),
+          supabase.from('user_career_stats').select('user_id, wins, user:users(display_name)'),
+        ]);
 
         // Build entries list
         const entries: WinsEntry[] = [];
 
-        // Add all NASCAR drivers
-        for (const d of (nascarDrivers ?? []) as any[]) {
+        // Add all NASCAR drivers from Wikipedia
+        for (const d of wikiDrivers) {
           entries.push({
             name: d.name,
             wins: d.wins,
-            isActive: d.is_active,
+            isActive: d.isActive,
             isLeagueMember: false,
             isCurrentUser: false,
           });
@@ -333,7 +329,7 @@ function AllTimeWinsList({ entries }: { entries: WinsEntry[] }) {
 
       {/* Footer note */}
       <div className="text-center text-[11px] text-gray-600 pt-4 pb-2">
-        NASCAR Cup Series all-time wins · Auto-updates after each race
+        NASCAR Cup Series all-time wins · Live from Wikipedia
       </div>
     </div>
   );
