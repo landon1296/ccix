@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { WakeLockProvider } from '../contexts/WakeLockContext';
 
 const tabs = [
   { to: '/app/races', label: 'Races', icon: FlagIcon },
@@ -17,41 +18,43 @@ export function AppLayout() {
   );
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col max-w-lg mx-auto">
-      {/* Header */}
-      <header className="bg-surface border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-        <span className="text-xl font-black text-accent tracking-widest">CCIX</span>
-        {activeTab && <span className="text-sm text-gray-400 font-medium">{activeTab.label}</span>}
-      </header>
+    <WakeLockProvider>
+      <div className="min-h-screen bg-bg flex flex-col max-w-lg mx-auto">
+        {/* Header */}
+        <header className="bg-surface border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-20">
+          <span className="text-xl font-black text-accent tracking-widest">CCIX</span>
+          {activeTab && <span className="text-sm text-gray-400 font-medium">{activeTab.label}</span>}
+        </header>
 
-      {/* Page content */}
-      <main className="flex-1 overflow-y-auto pb-20">
-        <Outlet />
-      </main>
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto pb-20">
+          <Outlet />
+        </main>
 
-      {/* Bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-20">
-        <div className="max-w-lg mx-auto flex">
-          {tabs.map(({ to, label, icon: Icon }) => {
-            const isActive = to === '/app/settings'
-              ? location.pathname.startsWith('/app/settings')
-              : location.pathname.startsWith(to);
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors ${
-                  isActive ? 'text-accent' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                <Icon size={22} active={isActive} />
-                {label}
-              </NavLink>
-            );
-          })}
-        </div>
-      </nav>
-    </div>
+        {/* Bottom tab bar */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-20">
+          <div className="max-w-lg mx-auto flex">
+            {tabs.map(({ to, label, icon: Icon }) => {
+              const isActive = to === '/app/settings'
+                ? location.pathname.startsWith('/app/settings')
+                : location.pathname.startsWith(to);
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                    isActive ? 'text-accent' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  <Icon size={22} active={isActive} />
+                  {label}
+                </NavLink>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+    </WakeLockProvider>
   );
 }
 

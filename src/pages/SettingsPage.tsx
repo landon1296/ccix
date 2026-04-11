@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/Spinner';
 import { CarAvatar, AvatarStyle } from '../utils/avatar';
-import { useWakeLock } from '../hooks/useWakeLock';
+import { useWakeLockContext } from '../contexts/WakeLockContext';
 import * as LeagueService from '../services/leagues';
 import { League } from '../lib/supabase';
 
@@ -26,7 +26,7 @@ export function SettingsPage() {
 
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loadingLeagues, setLoadingLeagues] = useState(true);
-  const wakeLock = useWakeLock();
+  const wakeLock = useWakeLockContext();
 
   useEffect(() => {
     if (!user) return;
