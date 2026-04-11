@@ -134,10 +134,6 @@ export function ManageSeasonPage() {
   const [editingRace, setEditingRace] = useState<Race | null>(null);
   const [editName, setEditName] = useState('');
 
-  // Add race flow: after picking a track, optionally set a race title
-  const [pendingTrack, setPendingTrack] = useState<string | null>(null);
-  const [newRaceTitle, setNewRaceTitle] = useState('');
-
   const load = useCallback(async () => {
     if (!seasonId) return;
     setLoading(true);
@@ -202,32 +198,14 @@ export function ManageSeasonPage() {
     await RaceService.deleteRace(raceId);
   };
 
-  // Step 1 of add: user picks a track → show title prompt
-  const handlePickTrack = (trackName: string) => {
-    setPendingTrack(trackName);
-    setNewRaceTitle('');
+  const handleAddTrack = async (trackName: string) => {
+    if (!seasonId) return;
+    setSaving(true);
+    const { race, error: err } = await RaceService.createRace(seasonId, trackName);
+    if (err) { setError(err.message); } else if (race) { setRaces(prev => [...prev, race]); }
+    setSaving(false);
     setShowAddTrack(false);
     setTrackSearch('');
-  };
-
-  // Step 2 of add: confirm with optional title
-  const handleConfirmAdd = async () => {
-    if (!seasonId || !pendingTrack) return;
-    setSaving(true);
-    const { race, error: err } = await RaceService.createRace(seasonId, pendingTrack);
-    if (err) {
-      setError(err.message);
-    } else if (race) {
-      // If user provided a race title, save it
-      if (newRaceTitle.trim()) {
-        await RaceService.updateRaceName(race.id, newRaceTitle.trim());
-        race.race_name = newRaceTitle.trim();
-      }
-      setRaces(prev => [...prev, race]);
-    }
-    setSaving(false);
-    setPendingTrack(null);
-    setNewRaceTitle('');
   };
 
   // Edit race name
@@ -354,39 +332,11 @@ export function ManageSeasonPage() {
                 <button
                   key={track}
                   className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-surface-2 text-sm transition-colors"
-                  onClick={() => handlePickTrack(track)}
+                  onClick={() => handleAddTrack(track)}
                 >
                   {track}
                 </button>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Race Title Modal (after picking a track) ── */}
-      {pendingTrack && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
-          <div className="bg-surface rounded-xl p-5 w-full max-w-sm border border-border">
-            <h3 className="font-bold text-lg mb-1">Add Race</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Track: <span className="text-white font-medium">{pendingTrack}</span>
-            </p>
-            <label className="text-xs text-gray-400 mb-1 block">Race Name (optional)</label>
-            <input
-              className="input-field mb-1"
-              placeholder='e.g. "Daytona 500", "Race 1"'
-              value={newRaceTitle}
-              onChange={(e) => setNewRaceTitle(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && handleConfirmAdd()}
-            />
-            <p className="text-[11px] text-gray-500 mb-4">Leave blank to just use the track name.</p>
-            <div className="flex gap-3">
-              <button className="btn-secondary flex-1" onClick={() => setPendingTrack(null)}>Cancel</button>
-              <button className="btn-primary flex-1" onClick={handleConfirmAdd} disabled={saving}>
-                {saving ? <Spinner size={16} /> : 'Add Race'}
-              </button>
             </div>
           </div>
         </div>
