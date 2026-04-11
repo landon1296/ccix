@@ -210,7 +210,7 @@ export function RaceEntryPage() {
             </label>
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               className="input-field font-mono"
               placeholder="1:23.456"
               value={fastestLapTime}
