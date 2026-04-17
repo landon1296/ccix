@@ -46,6 +46,8 @@ export function RaceEntryPage() {
     setResults(res);
     const mine = res.find(r2 => r2.user_id === user.id) ?? null;
     setMyResult(mine);
+    setError('');
+    setSuccess('');
     if (mine) {
       setStage1(mine.stage1_pos?.toString() ?? '');
       setStage2(mine.stage2_pos?.toString() ?? '');
@@ -53,6 +55,13 @@ export function RaceEntryPage() {
       setFinish(mine.finish_pos?.toString() ?? '');
       setFastestLap(mine.fastest_lap);
       setFastestLapTime(mine.fastest_lap_time ?? '');
+    } else {
+      setStage1('');
+      setStage2('');
+      setStage3('');
+      setFinish('');
+      setFastestLap(false);
+      setFastestLapTime('');
     }
     if (r?.league_id) {
       const [{ league: lg }, { races: seasonRaces }] = await Promise.all([

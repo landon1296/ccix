@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/Spinner';
 import { CarAvatar } from '../utils/avatar';
@@ -41,6 +42,26 @@ function groupByTrack(
     members.sort((a, b) => b.totalPoints !== a.totalPoints ? b.totalPoints - a.totalPoints : b.wins - a.wins);
   }
   return map;
+}
+
+// Flame tiers based on wins at a track. Follows real flame physics:
+// dark red → orange → yellow → white → blue (hottest). Thresholds are
+// tuned for ~24 seasons/year with one dominant driver — top tier should
+// take 3+ years of sustained dominance to reach.
+interface FlameStyle {
+  bg?: string;
+  text: string;
+  name: string | null;
+}
+
+function getFlameStyle(wins: number): FlameStyle {
+  if (wins === 0)   return { text: 'text-gray-500',    name: null };
+  if (wins <= 2)    return { bg: 'rgba(153, 27, 27, 0.35)',  text: 'text-red-400',    name: 'EMBER' };
+  if (wins <= 5)    return { bg: 'rgba(249, 115, 22, 0.32)', text: 'text-orange-400', name: 'FLAME' };
+  if (wins <= 10)   return { bg: 'rgba(245, 158, 11, 0.30)', text: 'text-amber-400',  name: 'BLAZE' };
+  if (wins <= 19)   return { bg: 'rgba(250, 204, 21, 0.30)', text: 'text-yellow-300', name: 'INFERNO' };
+  if (wins <= 39)   return { bg: 'rgba(254, 240, 138, 0.40)', text: 'text-yellow-100', name: 'WHITE HOT' };
+  return              { bg: 'rgba(59, 130, 246, 0.40)',  text: 'text-blue-300',   name: 'BLUE CORE' };
 }
 
 export function StatsPage() {
@@ -202,10 +223,27 @@ export function StatsPage() {
   const leagueTrackMap = groupByTrack(leagueTracks);
   const sortedTrackNames = Array.from(leagueTrackMap.keys()).sort();
 
-  // Heatmap: max wins across all my tracks (at least 1 to avoid /0)
-  const maxWins = myTracks.length > 0 ? Math.max(...myTracks.map(t => t.wins), 1) : 1;
+  const handleRefresh = async () => {
+    if (tab === 'my') {
+      await loadMyStats();
+    } else if (tab === 'league') {
+      leagueLoaded.current = false;
+      await loadLeagueTab();
+    } else if (tab === 'bytrack') {
+      tracksLoaded.current = false;
+      await loadTracksTab();
+    } else if (tab === 'laptimes') {
+      lapTimesLoaded.current = false;
+      await loadLapTimesTab();
+    }
+  };
 
   return (
+    <PullToRefresh
+      onRefresh={handleRefresh}
+      pullingContent=""
+      refreshingContent={<div className="text-center py-2 text-accent text-sm">Refreshing...</div>}
+    >
     <div className="flex flex-col">
       {/* League selector */}
       {leagues.length > 1 && (
@@ -461,19 +499,22 @@ export function StatsPage() {
 
                         <div className="space-y-2">
                           {myTracks.map(t => {
-                            const intensity = heatmapMode && t.wins > 0
-                              ? Math.min(0.12 + (t.wins / maxWins) * 0.45, 0.57)
-                              : 0;
+                            const flame = heatmapMode ? getFlameStyle(t.wins) : null;
                             return (
                               <div
                                 key={t.trackName}
                                 className="card transition-colors duration-300"
-                                style={intensity > 0 ? { backgroundColor: `rgba(249,115,22,${intensity})` } : undefined}
+                                style={flame?.bg ? { backgroundColor: flame.bg } : undefined}
                               >
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="font-medium text-sm">{t.trackName}</span>
-                                  {heatmapMode && t.wins > 0 && (
-                                    <span className="ml-auto text-xs text-orange-400 font-semibold">{t.wins} win{t.wins !== 1 ? 's' : ''}</span>
+                                  <span className="text-xs text-gray-500">
+                                    · {t.racesCompleted} race{t.racesCompleted !== 1 ? 's' : ''}
+                                  </span>
+                                  {flame?.name && t.wins > 0 && (
+                                    <span className={`ml-auto text-xs font-bold tracking-wider ${flame.text}`}>
+                                      {flame.name} · {t.wins}
+                                    </span>
                                   )}
                                 </div>
                                 <div className="grid grid-cols-5 gap-2 text-center">
@@ -569,5 +610,6 @@ export function StatsPage() {
 
       </div>
     </div>
+    </PullToRefresh>
   );
 }

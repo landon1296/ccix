@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/Spinner';
 import { CarAvatar } from '../utils/avatar';
@@ -67,6 +68,11 @@ export function LeaderboardPage() {
   if (loading) return <div className="flex items-center justify-center h-48"><Spinner size={28} className="text-accent" /></div>;
 
   return (
+    <PullToRefresh
+      onRefresh={handleRefresh}
+      pullingContent=""
+      refreshingContent={<div className="text-center py-2 text-accent text-sm">Refreshing...</div>}
+    >
     <div className="px-4 py-4">
       {leagues.length > 1 && (
         <div className="mb-4">
@@ -108,6 +114,8 @@ export function LeaderboardPage() {
           {standings.map((s, idx) => {
             const isMe = s.userId === user?.id;
             const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : null;
+            const pointsBack = idx === 0 ? null : standings[0].totalPoints - s.totalPoints;
+            const gapAbove   = idx === 0 ? null : standings[idx - 1].totalPoints - s.totalPoints;
             return (
               <div
                 key={s.userId}
@@ -129,7 +137,13 @@ export function LeaderboardPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-black text-accent">{s.totalPoints}</div>
-                  <div className="text-xs text-gray-500">pts</div>
+                  <div className="text-xs text-gray-500">
+                    {pointsBack === null
+                      ? 'LEADER'
+                      : gapAbove === pointsBack
+                        ? `−${pointsBack}`
+                        : `−${pointsBack} · ${gapAbove} back`}
+                  </div>
                 </div>
               </div>
             );
@@ -137,5 +151,6 @@ export function LeaderboardPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

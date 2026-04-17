@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PullToRefresh from 'react-simple-pull-to-refresh';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from '../components/Spinner';
 import { CarAvatar } from '../utils/avatar';
@@ -100,6 +101,8 @@ export function RacesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleRefresh = () => load();
+
   const handleLeagueChange = async (leagueId: string) => {
     const league = leagues.find(l => l.id === leagueId);
     if (!league) return;
@@ -132,6 +135,11 @@ export function RacesPage() {
   }
 
   return (
+    <PullToRefresh
+      onRefresh={handleRefresh}
+      pullingContent=""
+      refreshingContent={<div className="text-center py-2 text-accent text-sm">Refreshing...</div>}
+    >
     <div className="px-4 py-4">
       {/* League selector */}
       {leagues.length > 1 && (
@@ -274,6 +282,7 @@ export function RacesPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }
 
