@@ -95,6 +95,8 @@ export function StatsPage() {
   const tracksLoaded = useRef(false);
   // Heat map toggle for "My Stats" by-track view
   const [heatmapMode, setHeatmapMode] = useState(false);
+  // Selected member in the by-track single-member view. '' = me.
+  const [selectedTrackUserId, setSelectedTrackUserId] = useState<string>('');
 
   // Lap Times tab (lazy)
   const [lapTimes, setLapTimes] = useState<StatsService.TrackLapTimes[]>([]);
@@ -198,6 +200,7 @@ export function StatsPage() {
     setSelectedLeague(lg);
     leagueLoaded.current = false;
     tracksLoaded.current = false;
+    setSelectedTrackUserId('');
     if (!lg || !user) return;
     setLoadingMy(true);
     const [activeRes, archivedRes, careerRes] = await Promise.all([
@@ -222,6 +225,24 @@ export function StatsPage() {
   // Grouped league track data
   const leagueTrackMap = groupByTrack(leagueTracks);
   const sortedTrackNames = Array.from(leagueTrackMap.keys()).sort();
+
+  // Derived: members available in the by-track single-member view (me + anyone with data)
+  const trackMembers: { id: string; name: string }[] = [];
+  const seenMembers = new Set<string>();
+  if (user) { trackMembers.push({ id: user.id, name: 'Me' }); seenMembers.add(user.id); }
+  for (const t of leagueTracks) {
+    if (!seenMembers.has(t.userId)) {
+      trackMembers.push({ id: t.userId, name: t.displayName });
+      seenMembers.add(t.userId);
+    }
+  }
+  const isViewingSelf = !selectedTrackUserId || selectedTrackUserId === user?.id;
+  const displayedTracks: StatsService.TrackStats[] = isViewingSelf
+    ? myTracks
+    : leagueTracks.filter(t => t.userId === selectedTrackUserId);
+  const selectedMemberName = isViewingSelf
+    ? 'Me'
+    : (trackMembers.find(m => m.id === selectedTrackUserId)?.name ?? 'Unknown');
 
   const handleRefresh = async () => {
     if (tab === 'my') {
@@ -471,34 +492,48 @@ export function StatsPage() {
 
                 {/* My by-track view */}
                 {trackView === 'mine' && (
-                  myTracks.length === 0
-                    ? <p className="text-gray-400 text-sm text-center py-8">No track stats yet. Enter race results to see per-track breakdowns.</p>
-                    : (
-                      <>
-                        {/* Header + heatmap toggle */}
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs text-gray-500 uppercase tracking-wider">My Stats by Track</span>
-                          <button
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                              heatmapMode
-                                ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                                : 'bg-surface-2 text-gray-400 border-transparent hover:text-white'
-                            }`}
-                            onClick={() => setHeatmapMode(h => !h)}
-                          >
-                            {/* Heat map icon */}
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                              <rect x="1" y="1" width="8" height="8" rx="1" opacity="0.25"/>
-                              <rect x="11" y="1" width="8" height="8" rx="1" opacity="0.5"/>
-                              <rect x="1" y="11" width="8" height="8" rx="1" opacity="0.75"/>
-                              <rect x="11" y="11" width="8" height="8" rx="1" opacity="1"/>
-                            </svg>
-                            Heat Map
-                          </button>
-                        </div>
+                  <>
+                    {/* Member selector + heatmap toggle */}
+                    <div className="flex items-center justify-between mb-3 gap-2">
+                      <select
+                        className="bg-surface-2 text-xs text-gray-300 font-medium rounded-lg px-2 py-1.5 border border-transparent focus:border-accent/40 focus:outline-none max-w-[55%] truncate"
+                        value={selectedTrackUserId}
+                        onChange={e => setSelectedTrackUserId(e.target.value)}
+                      >
+                        {trackMembers.map(m => (
+                          <option key={m.id} value={m.id === user?.id ? '' : m.id}>
+                            {m.name === 'Me' ? 'My Stats by Track' : `${m.name}'s Stats by Track`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                          heatmapMode
+                            ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                            : 'bg-surface-2 text-gray-400 border-transparent hover:text-white'
+                        }`}
+                        onClick={() => setHeatmapMode(h => !h)}
+                      >
+                        {/* Heat map icon */}
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <rect x="1" y="1" width="8" height="8" rx="1" opacity="0.25"/>
+                          <rect x="11" y="1" width="8" height="8" rx="1" opacity="0.5"/>
+                          <rect x="1" y="11" width="8" height="8" rx="1" opacity="0.75"/>
+                          <rect x="11" y="11" width="8" height="8" rx="1" opacity="1"/>
+                        </svg>
+                        Heat Map
+                      </button>
+                    </div>
 
-                        <div className="space-y-2">
-                          {myTracks.map(t => {
+                    {displayedTracks.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-8">
+                        {isViewingSelf
+                          ? 'No track stats yet. Enter race results to see per-track breakdowns.'
+                          : `No track stats for ${selectedMemberName} yet.`}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {displayedTracks.map(t => {
                             const flame = heatmapMode ? getFlameStyle(t.wins) : null;
                             return (
                               <div
@@ -530,9 +565,9 @@ export function StatsPage() {
                               </div>
                             );
                           })}
-                        </div>
-                      </>
-                    )
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )
